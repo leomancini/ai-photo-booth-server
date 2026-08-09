@@ -150,12 +150,14 @@ function BoothPage() {
     startSession();
   }, [startSession]);
 
-  // On-device mode: no scrolling, no cursor.
+  // The booth screen is a display, never something anyone points at, so the
+  // cursor is hidden whatever mode this is in -- it was previously tied to
+  // ?onDevice=true, which the kiosk URL does not set, so a pointer sat on the
+  // screen. Scroll locking stays with on-device, where the image overflows.
   useEffect(() => {
-    if (!ON_DEVICE) return;
     for (const el of [document.documentElement, document.body]) {
-      el.style.overflow = "hidden";
       el.style.cursor = "none";
+      if (ON_DEVICE) el.style.overflow = "hidden";
     }
   }, []);
 
