@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import QRCode from "qrcode";
 import { Page } from "./shared.jsx";
@@ -50,6 +50,11 @@ const WaitingWrap = styled.div`
   font-size: 32px;
 `;
 
+const Done = styled.div`
+  font-size: 96px;
+  line-height: 1;
+`;
+
 const Spinner = styled.div`
   width: 96px;
   height: 96px;
@@ -71,6 +76,12 @@ const KEY = PARAMS.get("key") || "";
 // ?onDevice=true — the image fills the width instead of the height
 // (vertical overflow is fine).
 const ON_DEVICE = PARAMS.get("onDevice") === "true";
+
+// How long the finished print stays on screen before the booth resets itself
+// and shows a QR code for the next person.
+const RESET_AFTER_PRINT_MS = 6000;
+
+const PRINT_IN_FLIGHT = ["queued", "claimed", "printing"];
 
 function BoothPage() {
   const [sessionId, setSessionId] = useState(null);
@@ -149,6 +160,23 @@ function BoothPage() {
   const showViewer =
     session && session.status !== "waiting" && session.status !== "scanned";
 
+  // Print state arrives on the same WebSocket as everything else, so the booth
+  // can follow a print someone started from their phone.
+  const printing = ready.find((r) => PRINT_IN_FLIGHT.includes(r.print?.status));
+  const printed = ready.find((r) => r.print?.status === "done");
+
+  // Once a print lands, leave it up long enough to be read, then start a fresh
+  // session so the next person walks up to a QR code. Tracking the job id keeps
+  // this from firing again on every snapshot for the same print.
+  const resetForJob = useRef(null);
+  useEffect(() => {
+    const jobId = printed?.print?.jobId;
+    if (!jobId || resetForJob.current === jobId) return;
+    resetForJob.current = jobId;
+    const timer = setTimeout(startSession, RESET_AFTER_PRINT_MS);
+    return () => clearTimeout(timer);
+  }, [printed, startSession]);
+
   // Keep the index valid as results stream in.
   useEffect(() => {
     if (index >= ready.length) setIndex(Math.max(0, ready.length - 1));
@@ -188,7 +216,17 @@ function BoothPage() {
 
   return (
     <Page>
-      {scanned ? (
+      {printing ? (
+        <WaitingWrap>
+          <Spinner />
+          Printing…
+        </WaitingWrap>
+      ) : printed ? (
+        <WaitingWrap>
+          <Done>🖨️</Done>
+          Take your photo!
+        </WaitingWrap>
+      ) : scanned ? (
         <WaitingWrap>
           <Spinner />
           Waiting for photos…
