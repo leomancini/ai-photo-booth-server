@@ -50,6 +50,11 @@ const WaitingWrap = styled.div`
   font-size: 32px;
 `;
 
+const FailureDetail = styled.div`
+  font-size: 22px;
+  color: #71717a;
+`;
+
 const Spinner = styled.div`
   width: 96px;
   height: 96px;
@@ -86,6 +91,27 @@ const RESET_AFTER_PRINT_MS = 8000;
 
 // Each finished photo gets this long on screen before the next one.
 const SLIDE_MS = 5000;
+
+// How long a failed print stays on screen before the booth goes back to the
+// photos, so they can try again from their phone.
+const PRINT_FAILED_MS = 12000;
+
+// The agent reports whatever the Bluetooth stack raised, which is not something
+// to put in front of someone at a party. Translate the ones that actually
+// happen into what a person can do about them.
+function failureHint(error = "") {
+  const text = String(error);
+  if (/DeviceNotFound|not found/i.test(text)) {
+    return "The printer is asleep or switched off";
+  }
+  if (/NotAvailable|powered off|adapter/i.test(text)) {
+    return "Lost the connection to the printer";
+  }
+  if (/paper|film|empty/i.test(text)) {
+    return "The printer is out of paper";
+  }
+  return "Try again from your phone";
+}
 
 function BoothPage() {
   const [sessionId, setSessionId] = useState(null);
@@ -165,11 +191,11 @@ function BoothPage() {
     session && session.status !== "waiting" && session.status !== "scanned";
 
   // Print state arrives on the same WebSocket as everything else, so the booth
-  // can follow a print someone started from their phone. A job that failed is
-  // ignored here: the phone shows the error and offers a retry.
+  // can follow a print someone started from their phone.
   const activePrint = ready.find(
     (r) => r.print && r.print.status !== "failed"
   )?.print?.jobId;
+  const failedPrint = ready.find((r) => r.print?.status === "failed")?.print;
 
   // Once a print starts, hold "Printing…" for a fixed minute, then tell them to
   // take their photo, then start a fresh session for the next person. Keyed on
@@ -190,6 +216,20 @@ function BoothPage() {
       clearTimeout(toReset);
     };
   }, [activePrint, startSession]);
+
+  // A failed print says so on the booth as well as the phone -- whoever is
+  // standing here is the one who can do something about it, and otherwise the
+  // booth just sits on a spinner that never resolves. The session is left
+  // alone so they can retry from their phone without losing their photos.
+  const failedJob = failedPrint?.jobId;
+  const shownFailure = useRef(null);
+  useEffect(() => {
+    if (!failedJob || shownFailure.current === failedJob) return;
+    shownFailure.current = failedJob;
+    setPrintPhase("failed");
+    const timer = setTimeout(() => setPrintPhase(null), PRINT_FAILED_MS);
+    return () => clearTimeout(timer);
+  }, [failedJob]);
 
   // Only start the slideshow once the *first* style exists, so the sequence
   // always opens on the same photo. Styles can finish in any order, but
@@ -251,6 +291,11 @@ function BoothPage() {
         </WaitingWrap>
       ) : printPhase === "ready" ? (
         <WaitingWrap>Take your photo</WaitingWrap>
+      ) : printPhase === "failed" ? (
+        <WaitingWrap>
+          Print failed
+          <FailureDetail>{failureHint(failedPrint?.error)}</FailureDetail>
+        </WaitingWrap>
       ) : scanned ? (
         <WaitingWrap>
           <Spinner />
