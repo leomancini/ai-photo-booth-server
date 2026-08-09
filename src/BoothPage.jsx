@@ -79,11 +79,14 @@ const ON_DEVICE = PARAMS.get("onDevice") === "true";
 
 // Measured end to end: the job is queued, the agent picks it up within a poll,
 // spends about ten seconds pushing the image over Bluetooth, and only then does
-// the paper start moving for its four passes -- roughly 70s from queueing to a
-// photo you can pick up. The booth runs its own clock from the moment the job
-// starts rather than following the printer's status, which reports "done"
-// slightly before the print is out.
-const PRINTING_MS = 70000;
+// the paper start moving for its four passes. The booth runs its own clock from
+// the moment the job starts rather than following the printer's status, which
+// reports "done" slightly before the print is out.
+//
+// 60s was clearly early and 70s was still a little early in practice, so this
+// is 85s. Erring long is the cheaper mistake: too short and someone reaches for
+// a photo that has not appeared yet.
+const PRINTING_MS = 85000;
 
 // How long "take your photo" stays up before the booth resets itself and shows
 // a QR code for the next person.
