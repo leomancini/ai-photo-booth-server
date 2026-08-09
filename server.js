@@ -31,10 +31,11 @@ const BASE_PROMPT =
   "structure, features, proportions, and likeness. Do not beautify, age, " +
   "de-age, or alter identity in ANY way — someone who knows them must " +
   "immediately recognize them in the result. " +
-  "Return a single image in portrait orientation with a 2:3 aspect ratio " +
-  "(like a 4x6 photo print, taller than wide). NEVER add a border, frame, " +
-  "mat, or margin of any kind — the artwork must always be full bleed, " +
-  "extending edge-to-edge on all four sides. ";
+  "Return a single image that is EXACTLY SQUARE — a 1:1 aspect ratio, the " +
+  "same width as height. The booth prints on square 3x3 photo paper, so " +
+  "compose for a square frame and keep every subject well inside it. " +
+  "NEVER add a border, frame, mat, or margin of any kind — the artwork must " +
+  "always be full bleed, extending edge-to-edge on all four sides. ";
 
 const STYLES = [
   {
@@ -213,7 +214,33 @@ async function generateStyledImage(style, imageContent) {
 
   const imgRes = await fetch(urlMatch[0]);
   if (!imgRes.ok) throw new Error("Failed to download the combined image");
-  return Buffer.from(await imgRes.arrayBuffer());
+  return toSquare(Buffer.from(await imgRes.arrayBuffer()));
+}
+
+// The booth prints on square 3x3 paper, edge to edge. The prompt asks for a
+// square image, but models honour aspect ratio loosely, so guarantee it here:
+// whatever comes back, the phone preview and the print are the same square.
+// Cropping rather than padding, because bars would show on a full-bleed print.
+async function toSquare(buf) {
+  try {
+    const { width, height } = await sharp(buf).metadata();
+    if (!width || !height || width === height) return buf;
+    const side = Math.min(width, height);
+    console.log(`[combine] cropping ${width}x${height} to ${side}x${side}`);
+    return await sharp(buf)
+      .extract({
+        left: Math.round((width - side) / 2),
+        top: Math.round((height - side) / 2),
+        width: side,
+        height: side,
+      })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+  } catch (e) {
+    // A crop failure should not lose an otherwise good image.
+    console.warn("[combine] square crop failed, using original:", e.message);
+    return buf;
+  }
 }
 
 // Normalize an uploaded file to a compressed JPEG data URL content part.
