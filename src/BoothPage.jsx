@@ -50,11 +50,6 @@ const WaitingWrap = styled.div`
   font-size: 32px;
 `;
 
-const Done = styled.div`
-  font-size: 96px;
-  line-height: 1;
-`;
-
 const Spinner = styled.div`
   width: 96px;
   height: 96px;
@@ -77,11 +72,18 @@ const KEY = PARAMS.get("key") || "";
 // (vertical overflow is fine).
 const ON_DEVICE = PARAMS.get("onDevice") === "true";
 
-// How long the finished print stays on screen before the booth resets itself
-// and shows a QR code for the next person.
-const RESET_AFTER_PRINT_MS = 6000;
+// A print takes about a minute of paper actually moving. The printer reports
+// the job finished a little before the photo is out and cool enough to grab,
+// so the booth runs its own clock from the moment the job starts rather than
+// following the printer's status.
+const PRINTING_MS = 60000;
 
-const PRINT_IN_FLIGHT = ["queued", "claimed", "printing"];
+// How long "take your photo" stays up before the booth resets itself and shows
+// a QR code for the next person.
+const RESET_AFTER_PRINT_MS = 8000;
+
+// Each finished photo gets this long on screen before the next one.
+const SLIDE_MS = 5000;
 
 function BoothPage() {
   const [sessionId, setSessionId] = useState(null);
@@ -161,21 +163,45 @@ function BoothPage() {
     session && session.status !== "waiting" && session.status !== "scanned";
 
   // Print state arrives on the same WebSocket as everything else, so the booth
-  // can follow a print someone started from their phone.
-  const printing = ready.find((r) => PRINT_IN_FLIGHT.includes(r.print?.status));
-  const printed = ready.find((r) => r.print?.status === "done");
+  // can follow a print someone started from their phone. A job that failed is
+  // ignored here: the phone shows the error and offers a retry.
+  const activePrint = ready.find(
+    (r) => r.print && r.print.status !== "failed"
+  )?.print?.jobId;
 
-  // Once a print lands, leave it up long enough to be read, then start a fresh
-  // session so the next person walks up to a QR code. Tracking the job id keeps
-  // this from firing again on every snapshot for the same print.
-  const resetForJob = useRef(null);
+  // Once a print starts, hold "Printing…" for a fixed minute, then tell them to
+  // take their photo, then start a fresh session for the next person. Keyed on
+  // the job id so repeated snapshots for the same print do not restack timers.
+  const [printPhase, setPrintPhase] = useState(null);
+  const printedJob = useRef(null);
   useEffect(() => {
-    const jobId = printed?.print?.jobId;
-    if (!jobId || resetForJob.current === jobId) return;
-    resetForJob.current = jobId;
-    const timer = setTimeout(startSession, RESET_AFTER_PRINT_MS);
-    return () => clearTimeout(timer);
-  }, [printed, startSession]);
+    if (!activePrint || printedJob.current === activePrint) return;
+    printedJob.current = activePrint;
+    setPrintPhase("printing");
+    const toReady = setTimeout(() => setPrintPhase("ready"), PRINTING_MS);
+    const toReset = setTimeout(() => {
+      setPrintPhase(null);
+      startSession();
+    }, PRINTING_MS + RESET_AFTER_PRINT_MS);
+    return () => {
+      clearTimeout(toReady);
+      clearTimeout(toReset);
+    };
+  }, [activePrint, startSession]);
+
+  // Only start the slideshow once the *first* style exists, so the sequence
+  // always opens on the same photo. Styles can finish in any order, but
+  // `results` keeps the order they were defined in, so filtering preserves it.
+  const firstReady = session?.results?.[0]?.status === "done";
+
+  useEffect(() => {
+    if (!firstReady || ready.length < 2 || printPhase) return;
+    const timer = setInterval(
+      () => setIndex((i) => (i + 1) % ready.length),
+      SLIDE_MS
+    );
+    return () => clearInterval(timer);
+  }, [firstReady, ready.length, printPhase]);
 
   // Keep the index valid as results stream in.
   useEffect(() => {
@@ -216,16 +242,13 @@ function BoothPage() {
 
   return (
     <Page>
-      {printing ? (
+      {printPhase === "printing" ? (
         <WaitingWrap>
           <Spinner />
           Printing…
         </WaitingWrap>
-      ) : printed ? (
-        <WaitingWrap>
-          <Done>🖨️</Done>
-          Take your photo!
-        </WaitingWrap>
+      ) : printPhase === "ready" ? (
+        <WaitingWrap>Take your photo</WaitingWrap>
       ) : scanned ? (
         <WaitingWrap>
           <Spinner />
@@ -235,7 +258,7 @@ function BoothPage() {
         <QRWrap>
           {qr && <QRImage src={qr.dataUrl} alt="Scan to upload photos" />}
         </QRWrap>
-      ) : current ? (
+      ) : firstReady && current ? (
         <FullImage
           $onDevice={ON_DEVICE}
           src={`/api/session/${sessionId}/image/${current.id}?key=${encodeURIComponent(KEY)}`}

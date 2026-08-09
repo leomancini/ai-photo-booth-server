@@ -376,6 +376,10 @@ function broadcastSession(sessionId) {
 // A job keeps its own copy of the image bytes. Starting a new session clears
 // every previous session, and without that copy a queued job would lose the
 // image out from under it the moment someone walked up and started over.
+// How long the other styles wait before starting, so the first style gets a
+// clear run at the model and the booth has something to show sooner.
+const STYLE_STAGGER_MS = 2500;
+
 const printJobs = new Map();
 const PRINT_JOB_TTL_MS = 60 * 60 * 1000;
 let printJobCounter = 0;
@@ -581,21 +585,33 @@ app.post("/api/session/:id/photos", upload.array("images", 3), async (req, res) 
     res.json({ ok: true });
     broadcastSession(sessionId);
 
-    Promise.allSettled(
-      STYLES.map(async (style) => {
-        const entry = s.results.find((r) => r.id === style.id);
-        try {
-          const buf = await generateStyledImage(style, imageContent);
-          s.images.set(style.id, buf);
-          entry.status = "done";
-        } catch (e) {
-          console.error(`[session:${style.id}] error:`, e);
-          entry.status = "error";
-          entry.error = e.message || "Generation failed";
-        }
-        broadcastSession(sessionId);
-      })
-    ).then(() => {
+    const runStyle = async (style) => {
+      const entry = s.results.find((r) => r.id === style.id);
+      try {
+        const buf = await generateStyledImage(style, imageContent);
+        s.images.set(style.id, buf);
+        entry.status = "done";
+      } catch (e) {
+        console.error(`[session:${style.id}] error:`, e);
+        entry.status = "error";
+        entry.error = e.message || "Generation failed";
+      }
+      broadcastSession(sessionId);
+    };
+
+    // The booth shows the styles in order and will not start until the first
+    // one exists, so give that one a head start rather than having three
+    // requests race. The rest still run concurrently behind it.
+    const [first, ...rest] = STYLES;
+    Promise.allSettled([
+      runStyle(first),
+      ...rest.map(
+        (style) =>
+          new Promise((resolve) => {
+            setTimeout(() => resolve(runStyle(style)), STYLE_STAGGER_MS);
+          })
+      ),
+    ]).then(() => {
       s.status = "done";
       broadcastSession(sessionId);
     });
