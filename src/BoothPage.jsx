@@ -83,10 +83,10 @@ const ON_DEVICE = PARAMS.get("onDevice") === "true";
 // the moment the job starts rather than following the printer's status, which
 // reports "done" slightly before the print is out.
 //
-// 60s was clearly early and 70s was still a little early in practice, so this
-// is 85s. Erring long is the cheaper mistake: too short and someone reaches for
-// a photo that has not appeared yet.
-const PRINTING_MS = 85000;
+// Tuned against real prints: 60s was clearly early, 70s still slightly early,
+// 85s slightly long. Erring long is the cheaper mistake -- too short and
+// someone reaches for a photo that has not dropped yet.
+const PRINTING_MS = 80000;
 
 // How long "take your photo" stays up before the booth resets itself and shows
 // a QR code for the next person.
