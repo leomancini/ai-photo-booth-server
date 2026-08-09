@@ -274,6 +274,21 @@ function BoothPage() {
 
   const current = ready[index];
 
+  // The booth's physical buttons are wired to the Pi, not to this browser, so
+  // publish what is on screen for the Pi's button daemon to read over the
+  // DevTools port: which photo is showing (so it can light that button), and
+  // whether a press should be accepted at all.
+  const photoIds = ready.map((r) => r.id).join(",");
+  useEffect(() => {
+    window.__boothState = {
+      sessionId,
+      photos: ready.map((r) => ({ id: r.id, label: r.label })),
+      index,
+      phase: printPhase,
+      selectable: Boolean(firstReady && current && !printPhase),
+    };
+  }, [sessionId, photoIds, index, printPhase, firstReady, current]);
+
   if (authError) {
     return (
       <Page>
