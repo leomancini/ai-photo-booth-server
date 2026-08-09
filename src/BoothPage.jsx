@@ -72,11 +72,13 @@ const KEY = PARAMS.get("key") || "";
 // (vertical overflow is fine).
 const ON_DEVICE = PARAMS.get("onDevice") === "true";
 
-// A print takes about a minute of paper actually moving. The printer reports
-// the job finished a little before the photo is out and cool enough to grab,
-// so the booth runs its own clock from the moment the job starts rather than
-// following the printer's status.
-const PRINTING_MS = 60000;
+// Measured end to end: the job is queued, the agent picks it up within a poll,
+// spends about ten seconds pushing the image over Bluetooth, and only then does
+// the paper start moving for its four passes -- roughly 70s from queueing to a
+// photo you can pick up. The booth runs its own clock from the moment the job
+// starts rather than following the printer's status, which reports "done"
+// slightly before the print is out.
+const PRINTING_MS = 70000;
 
 // How long "take your photo" stays up before the booth resets itself and shows
 // a QR code for the next person.
