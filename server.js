@@ -322,6 +322,7 @@ function sessionSnapshot(s) {
       label,
       status,
       error,
+      print: printStateFor(s.id, id),
     })),
   };
 }
@@ -337,6 +338,36 @@ function broadcastSession(sessionId) {
     } catch {}
   }
 }
+
+// ---------------------------------------------------------------------------
+// Print queue
+// ---------------------------------------------------------------------------
+// The booth's printer is a Bluetooth device wired to a Raspberry Pi that this
+// server cannot reach. So the Pi polls this queue instead, prints, and reports
+// back.
+//
+// A job keeps its own copy of the image bytes. Starting a new session clears
+// every previous session, and without that copy a queued job would lose the
+// image out from under it the moment someone walked up and started over.
+const printJobs = new Map();
+const PRINT_JOB_TTL_MS = 60 * 60 * 1000;
+let printJobCounter = 0;
+
+function printStateFor(sessionId, styleId) {
+  let latest = null;
+  for (const job of printJobs.values()) {
+    if (job.sessionId !== sessionId || job.styleId !== styleId) continue;
+    if (!latest || job.createdAt >= latest.createdAt) latest = job;
+  }
+  return latest ? { jobId: latest.id, status: latest.status, error: latest.error } : null;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, job] of printJobs) {
+    if (now - job.createdAt > PRINT_JOB_TTL_MS) printJobs.delete(id);
+  }
+}, 5 * 60 * 1000).unref();
 
 // Short session IDs keep the QR code simple. Ambiguous characters excluded.
 const SESSION_ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -355,6 +386,7 @@ app.post("/api/session", requireKey, (req, res) => {
 
   const sessionId = shortSessionId();
   sessions.set(sessionId, {
+    id: sessionId,
     createdAt: Date.now(),
     status: "waiting",
     results: [],
@@ -396,6 +428,100 @@ app.get("/api/session/:id/image/:styleId", requireKey, (req, res) => {
   res.setHeader("Content-Type", "image/jpeg");
   res.setHeader("Cache-Control", "private, max-age=3600");
   res.end(buf);
+});
+
+// Phone-side view of a session, so the upload page can show the finished
+// photos and offer to print one. Keyless for the same reason as the endpoints
+// above: the phone only ever learns the session ID from the QR code.
+app.get("/api/session/:id/status", (req, res) => {
+  const s = sessions.get(req.params.id);
+  if (!s) return res.status(404).json({ error: "Session not found" });
+  res.json(sessionSnapshot(s));
+});
+
+// Phone-side thumbnail of a finished style.
+app.get("/api/session/:id/preview/:styleId", (req, res) => {
+  const s = sessions.get(req.params.id);
+  const buf = s?.images.get(req.params.styleId);
+  if (!buf) return res.status(404).end();
+  res.setHeader("Content-Type", "image/jpeg");
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.end(buf);
+});
+
+// Phone-side: ask for a print. Copies the image into the job so a later
+// session reset cannot strand it.
+app.post("/api/session/:id/print", (req, res) => {
+  const s = sessions.get(req.params.id);
+  if (!s) return res.status(404).json({ error: "Session not found" });
+
+  const styleId = req.body?.styleId;
+  const buf = styleId && s.images.get(styleId);
+  if (!buf) return res.status(404).json({ error: "That photo is not ready yet" });
+
+  const existing = printStateFor(s.id, styleId);
+  if (existing && existing.status !== "failed") {
+    return res.json({ jobId: existing.jobId, status: existing.status, duplicate: true });
+  }
+
+  const job = {
+    id: `p${++printJobCounter}${shortSessionId(4)}`,
+    sessionId: s.id,
+    styleId,
+    label: s.results.find((r) => r.id === styleId)?.label || styleId,
+    image: buf,
+    status: "queued",
+    error: null,
+    createdAt: Date.now(),
+  };
+  printJobs.set(job.id, job);
+  broadcastSession(s.id);
+  res.json({ jobId: job.id, status: job.status });
+});
+
+// Device-side: the Pi claims the oldest queued job. 204 means nothing to do,
+// which is the common case, so keep it cheap.
+app.get("/api/print/next", requireKey, (req, res) => {
+  let next = null;
+  for (const job of printJobs.values()) {
+    if (job.status !== "queued") continue;
+    if (!next || job.createdAt < next.createdAt) next = job;
+  }
+  if (!next) return res.status(204).end();
+
+  next.status = "claimed";
+  next.claimedAt = Date.now();
+  broadcastSession(next.sessionId);
+  res.json({
+    jobId: next.id,
+    sessionId: next.sessionId,
+    styleId: next.styleId,
+    label: next.label,
+    bytes: next.image.length,
+  });
+});
+
+app.get("/api/print/:jobId/image", requireKey, (req, res) => {
+  const job = printJobs.get(req.params.jobId);
+  if (!job) return res.status(404).end();
+  res.setHeader("Content-Type", "image/jpeg");
+  res.end(job.image);
+});
+
+// Device-side progress. "printing" while the job is on the wire, then "done"
+// or "failed" -- a failed job goes back on the queue so it can be retried.
+app.post("/api/print/:jobId/status", requireKey, (req, res) => {
+  const job = printJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+
+  const status = req.body?.status;
+  if (!["printing", "done", "failed"].includes(status)) {
+    return res.status(400).json({ error: "status must be printing, done or failed" });
+  }
+  job.status = status;
+  job.error = status === "failed" ? req.body?.error || "Print failed" : null;
+  broadcastSession(job.sessionId);
+  res.json({ ok: true });
 });
 
 // The phone posts its photos here; generation runs in the background and the

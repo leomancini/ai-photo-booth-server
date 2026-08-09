@@ -62,14 +62,110 @@ const Done = styled.div`
   font-size: 84px;
 `;
 
+const ResultsWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 480px;
+`;
+
+const ResultCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #1a1a1f;
+  padding-bottom: 12px;
+
+  img {
+    width: 100%;
+    display: block;
+  }
+`;
+
+const ResultLabel = styled.div`
+  padding: 0 14px;
+  color: #a1a1aa;
+  font-size: 15px;
+`;
+
+const PrintButton = styled(Button)`
+  margin: 0 14px;
+  background: ${(p) => (p.disabled ? "#1a1a1f" : "#f4f4f5")};
+  color: ${(p) => (p.disabled ? "#52525b" : "#18181b")};
+`;
+
+const Waiting = styled.div`
+  color: #a1a1aa;
+  font-size: 17px;
+  text-align: center;
+  padding: 24px 0;
+`;
+
 const MAX_PHOTOS = 3;
+
+// What the print job status should say on the button.
+const PRINT_LABELS = {
+  queued: "Sending to printer…",
+  claimed: "Sending to printer…",
+  printing: "Printing…",
+  done: "Printed ✓",
+  failed: "Print failed — tap to retry",
+};
 
 function UploadPage({ sessionId }) {
   const [photos, setPhotos] = useState([]);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(null);
+  const [results, setResults] = useState([]);
   const input = useRef(null);
+
+  // Once the photos are away, follow the session so the finished images can be
+  // offered for printing. Polling rather than a WebSocket: the phone has no API
+  // key, and this page is only open for a minute or two.
+  useEffect(() => {
+    if (!sent) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/session/${sessionId}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!stop) setResults(data.results || []);
+        }
+      } catch {}
+      if (!stop) setTimeout(tick, 2000);
+    };
+    tick();
+    return () => {
+      stop = true;
+    };
+  }, [sent, sessionId]);
+
+  const requestPrint = async (styleId) => {
+    setError(null);
+    // Show the queued state immediately; the next poll confirms it.
+    setResults((prev) =>
+      prev.map((r) => (r.id === styleId ? { ...r, print: { status: "queued" } } : r))
+    );
+    try {
+      const res = await fetch(`/api/session/${sessionId}/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ styleId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not start the print");
+    } catch (e) {
+      setError(e.message);
+      setResults((prev) =>
+        prev.map((r) => (r.id === styleId ? { ...r, print: null } : r))
+      );
+    }
+  };
 
   // Tell the kiosk the QR code was scanned.
   useEffect(() => {
@@ -116,10 +212,39 @@ function UploadPage({ sessionId }) {
   };
 
   if (sent) {
+    const ready = results.filter((r) => r.status === "done");
     return (
       <Page>
         <Centered>
-          <Done>✅</Done>
+          {!ready.length ? (
+            <>
+              <Done>✅</Done>
+              <Waiting>Creating your photos…</Waiting>
+            </>
+          ) : (
+            <ResultsWrap>
+              {ready.map((r) => {
+                const state = r.print?.status;
+                const busy = state && state !== "failed";
+                return (
+                  <ResultCard key={r.id}>
+                    <img
+                      src={`/api/session/${sessionId}/preview/${r.id}`}
+                      alt={r.label}
+                    />
+                    <ResultLabel>{r.label}</ResultLabel>
+                    <PrintButton
+                      disabled={!!busy}
+                      onClick={() => requestPrint(r.id)}
+                    >
+                      {state ? PRINT_LABELS[state] || state : "Print this one"}
+                    </PrintButton>
+                  </ResultCard>
+                );
+              })}
+            </ResultsWrap>
+          )}
+          {error && <ErrorMsg>{error}</ErrorMsg>}
         </Centered>
       </Page>
     );
