@@ -68,7 +68,8 @@ const SubmitButton = styled(Button)`
 `;
 
 const Done = styled.div`
-  font-size: 84px;
+  font-size: 22px;
+  font-weight: 600;
 `;
 
 const ResultsWrap = styled.div`
@@ -227,7 +228,7 @@ function UploadPage({ sessionId }) {
         <Centered>
           {!ready.length ? (
             <>
-              <Done>✅</Done>
+              <Done>Photos sent!</Done>
               <Waiting>Creating your photos</Waiting>
             </>
           ) : (
