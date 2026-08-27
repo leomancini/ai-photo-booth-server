@@ -59,8 +59,7 @@ const STYLES = [
       "Make it look like a grand Renaissance oil painting: rich " +
       "chiaroscuro lighting, ornate period clothing and drapery, gilded " +
       "palace or dramatic landscape background, visible painterly " +
-      "brushwork and canvas texture filling the entire frame. No text, " +
-      "no lettering, no borders — pure edge-to-edge painted scene.",
+      "brushwork and canvas texture filling the entire frame.",
   },
   {
     id: "cosmic",
@@ -70,10 +69,214 @@ const STYLES = [
       "Make it a retro sci-fi cosmic scene: the subjects floating among " +
       "swirling nebulae, glowing planets, rings, comets, and star " +
       "fields, saturated 70s space-art airbrush style with cosmic light " +
-      "washing over everything, dense detail to every edge. No text, no " +
-      "lettering, no borders — pure edge-to-edge scene.",
+      "washing over everything, dense detail to every edge.",
+  },
+  {
+    id: "watercolor",
+    label: "Watercolor",
+    prompt:
+      BASE_PROMPT +
+      "Make it a luminous watercolor painting: loose expressive washes, " +
+      "blooming wet-on-wet pigment, soft granulated texture, delicate " +
+      "color bleeds filling the whole page.",
+  },
+  {
+    id: "ukiyo-e",
+    label: "Woodblock Print",
+    prompt:
+      BASE_PROMPT +
+      "Make it a Japanese ukiyo-e woodblock print: flat elegant color " +
+      "planes, bold flowing outlines, stylized waves, clouds and " +
+      "blossoms, Mount-Fuji-era palette and washi paper texture.",
+  },
+  {
+    id: "pop-art",
+    label: "Pop Art",
+    prompt:
+      BASE_PROMPT +
+      "Make it bold pop art: saturated primary colors, thick graphic " +
+      "outlines, halftone dot shading, comic-panel energy with dense " +
+      "graphic patterns to every edge.",
+  },
+  {
+    id: "claymation",
+    label: "Claymation",
+    prompt:
+      BASE_PROMPT +
+      "Make it a claymation scene: the subjects as charming sculpted " +
+      "plasticine figures with visible fingerprints and tool marks, " +
+      "handcrafted miniature set, warm studio lighting.",
+  },
+  {
+    id: "stained-glass",
+    label: "Stained Glass",
+    prompt:
+      BASE_PROMPT +
+      "Make it a radiant stained-glass window: jewel-toned glass panes, " +
+      "dark leading lines, light glowing through every pane, ornate " +
+      "patterns filling the frame corner to corner.",
+  },
+  {
+    id: "mosaic",
+    label: "Ancient Mosaic",
+    prompt:
+      BASE_PROMPT +
+      "Make it an ancient Roman mosaic: thousands of small stone and " +
+      "glass tesserae, earthy pigments with gold accents, weathered " +
+      "texture, decorative tiled patterns to every edge.",
+  },
+  {
+    id: "neon-noir",
+    label: "Neon City",
+    prompt:
+      BASE_PROMPT +
+      "Make it a rain-soaked neon cyberpunk city at night: glowing " +
+      "signs reflected in wet streets, holographic haze, dramatic " +
+      "magenta-and-cyan rim lighting, dense futuristic detail.",
+  },
+  {
+    id: "underwater",
+    label: "Underwater Dream",
+    prompt:
+      BASE_PROMPT +
+      "Make it a dreamy underwater scene: the subjects drifting among " +
+      "coral gardens, shafts of sunlight through turquoise water, " +
+      "schools of fish, jellyfish glow, bubbles rising everywhere.",
+  },
+  {
+    id: "jungle",
+    label: "Jungle Expedition",
+    prompt:
+      BASE_PROMPT +
+      "Make it a lush jungle adventure: dense tropical foliage, " +
+      "orchids and vines, misty golden light through the canopy, " +
+      "colorful birds and butterflies filling every corner.",
+  },
+  {
+    id: "winter",
+    label: "Winter Wonderland",
+    prompt:
+      BASE_PROMPT +
+      "Make it a magical winter wonderland: falling snow, frosted " +
+      "pines, ice crystals sparkling, aurora ribbons across the sky, " +
+      "cozy glowing light on the subjects.",
+  },
+  {
+    id: "pixel-art",
+    label: "Pixel Art",
+    prompt:
+      BASE_PROMPT +
+      "Make it retro video-game pixel art: chunky 16-bit pixels, " +
+      "vibrant limited palette, detailed game-world background with " +
+      "clouds, hills and sprites filling the whole screen.",
+  },
+  {
+    id: "paper-collage",
+    label: "Paper Collage",
+    prompt:
+      BASE_PROMPT +
+      "Make it a handcrafted cut-paper collage: layered torn and cut " +
+      "colored papers with visible edges and drop shadows, playful " +
+      "shapes and patterns layered to every edge.",
+  },
+  {
+    id: "street-mural",
+    label: "Street Mural",
+    prompt:
+      BASE_PROMPT +
+      "Make it a vibrant spray-painted street mural: bold colors, drips " +
+      "and splatters, stenciled shapes and abstract graffiti swirls " +
+      "(shapes only, never letters), painted brick texture throughout.",
+  },
+  {
+    id: "art-nouveau",
+    label: "Art Nouveau",
+    prompt:
+      BASE_PROMPT +
+      "Make it an Art Nouveau masterpiece: flowing organic lines, " +
+      "ornamental floral motifs, muted gold and jewel tones, elegant " +
+      "swirling patterns weaving around the subjects to every edge.",
+  },
+  {
+    id: "impressionist",
+    label: "Impressionist",
+    prompt:
+      BASE_PROMPT +
+      "Make it an Impressionist painting: dappled sunlight, visible " +
+      "broken brushstrokes, garden or riverside setting, shimmering " +
+      "color vibrating across the entire canvas.",
+  },
+  {
+    id: "film-noir",
+    label: "Film Noir",
+    prompt:
+      BASE_PROMPT +
+      "Make it moody film noir: dramatic black-and-white, hard shadows " +
+      "and venetian-blind light, cigarette-smoke haze, rain-slicked " +
+      "1940s city atmosphere filling the frame.",
+  },
+  {
+    id: "synthwave",
+    label: "Synthwave Sunset",
+    prompt:
+      BASE_PROMPT +
+      "Make it an 80s synthwave scene: giant striped sunset over a " +
+      "glowing grid horizon, chrome and neon gradients, palm " +
+      "silhouettes, VHS glow washing over the subjects.",
+  },
+  {
+    id: "baroque-floral",
+    label: "Baroque Florals",
+    prompt:
+      BASE_PROMPT +
+      "Make it a Dutch Baroque still-life world: the subjects nestled " +
+      "in an abundance of dramatic flowers, fruit and foliage, deep " +
+      "shadowed background, rich oil-paint glow to every edge.",
+  },
+  {
+    id: "candyland",
+    label: "Candy World",
+    prompt:
+      BASE_PROMPT +
+      "Make it a pastel candy world: lollipop forests, whipped-cream " +
+      "clouds, sprinkle rain, gumdrop hills, glossy sugary shine on " +
+      "everything, sweet colors packed to every edge.",
+  },
+  {
+    id: "wild-west",
+    label: "Wild West",
+    prompt:
+      BASE_PROMPT +
+      "Make it a cinematic Wild West scene: golden desert light, dusty " +
+      "frontier town or canyon backdrop, period western outfits, warm " +
+      "sepia-kissed tones with dramatic sky.",
+  },
+  {
+    id: "origami",
+    label: "Origami World",
+    prompt:
+      BASE_PROMPT +
+      "Make it a folded-paper origami world: the subjects and scenery " +
+      "rendered as crisp folded paper with visible creases, delicate " +
+      "paper cranes and flowers, soft studio light on every fold.",
   },
 ];
+
+// Every style must render as pure edge-to-edge imagery.
+for (const style of STYLES) {
+  style.prompt +=
+    " No text, no lettering, no borders — pure edge-to-edge content.";
+}
+
+// Each session gets a random hand of styles from the full deck.
+function pickStyles(count) {
+  const pool = [...STYLES];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count);
+}
 
 // Max dimension the uploaded images are resized to before sending (keeps the
 // request payload reasonable and improves reliability).
@@ -583,8 +786,9 @@ app.post("/api/session/:id/photos", upload.array("images", 3), async (req, res) 
     const imageContent = await Promise.all(files.map(normalizeUpload));
 
     const sessionId = req.params.id;
+    const picked = pickStyles(3);
     s.status = "generating";
-    s.results = STYLES.map(({ id, label }) => ({ id, label, status: "pending" }));
+    s.results = picked.map(({ id, label }) => ({ id, label, status: "pending" }));
     s.images = new Map();
     res.json({ ok: true });
     broadcastSession(sessionId);
@@ -606,7 +810,7 @@ app.post("/api/session/:id/photos", upload.array("images", 3), async (req, res) 
     // The booth shows the styles in order and will not start until the first
     // one exists, so give that one a head start rather than having three
     // requests race. The rest still run concurrently behind it.
-    const [first, ...rest] = STYLES;
+    const [first, ...rest] = picked;
     Promise.allSettled([
       runStyle(first),
       ...rest.map(
