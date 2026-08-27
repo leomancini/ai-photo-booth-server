@@ -90,6 +90,7 @@ const WaitingWrap = styled.div`
   gap: 40px;
   color: #a1a1aa;
   font-size: 32px;
+  transform: translateY(20px);
 `;
 
 const FailureDetail = styled.div`
