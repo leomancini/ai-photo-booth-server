@@ -15,7 +15,7 @@ const QRWrap = styled.div`
 
 const QRImage = styled.img`
   width: min(315px, 60vw);
-  transform: translateY(-12px);
+  transform: translate(-8px, 0);
 `;
 
 const FullImage = styled.img`
