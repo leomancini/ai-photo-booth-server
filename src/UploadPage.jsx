@@ -284,12 +284,11 @@ function UploadPage({ sessionId }) {
           }}
         />
 
-        <AddButton
-          disabled={photos.length >= MAX_PHOTOS}
-          onClick={() => input.current?.click()}
-        >
-          {photos.length ? "Add more photos" : "Choose photos"}
-        </AddButton>
+        {photos.length < MAX_PHOTOS && (
+          <AddButton onClick={() => input.current?.click()}>
+            {photos.length ? "Add more photos" : "Choose photos"}
+          </AddButton>
+        )}
 
         {photos.length >= 1 && (
           <SubmitButton disabled={sending} onClick={submit}>
