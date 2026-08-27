@@ -40,12 +40,13 @@ const Remove = styled.button`
   right: 6px;
   width: 26px;
   height: 26px;
-  border-radius: 50%;
   border: none;
-  background: rgba(0, 0, 0, 0.65);
+  background: none;
+  padding: 0;
   color: #fff;
-  font-size: 14px;
+  font-size: 20px;
   line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   cursor: pointer;
 `;
 
