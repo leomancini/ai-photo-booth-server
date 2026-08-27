@@ -52,22 +52,26 @@ const STYLES = [
       "empty space.",
   },
   {
-    id: "classic",
-    label: "Classic Family Photo",
+    id: "renaissance",
+    label: "Renaissance Painting",
     prompt:
       BASE_PROMPT +
-      "Make it look like a classic old-style formal family photograph: " +
-      "vintage studio portrait, sepia or faded tones, formal posed " +
-      "composition, soft studio lighting, aged photo texture.",
+      "Make it look like a grand Renaissance oil painting: rich " +
+      "chiaroscuro lighting, ornate period clothing and drapery, gilded " +
+      "palace or dramatic landscape background, visible painterly " +
+      "brushwork and canvas texture filling the entire frame. No text, " +
+      "no lettering, no borders — pure edge-to-edge painted scene.",
   },
   {
-    id: "movie-poster",
-    label: "Movie Poster",
+    id: "cosmic",
+    label: "Cosmic Adventure",
     prompt:
       BASE_PROMPT +
-      "Make it look like an old-school vintage movie poster: dramatic " +
-      "painted illustration style, bold title typography, retro color " +
-      "palette, cinematic composition with billing block at the bottom.",
+      "Make it a retro sci-fi cosmic scene: the subjects floating among " +
+      "swirling nebulae, glowing planets, rings, comets, and star " +
+      "fields, saturated 70s space-art airbrush style with cosmic light " +
+      "washing over everything, dense detail to every edge. No text, no " +
+      "lettering, no borders — pure edge-to-edge scene.",
   },
 ];
 
