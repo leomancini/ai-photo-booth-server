@@ -18,6 +18,47 @@ const QRImage = styled.img`
   transform: translate(-8px, 20px);
 `;
 
+// While photos generate, show a new creating-verb every second, picked at
+// random but never the same one twice in a row.
+const CREATING_VERBS = [
+  "Imagining", "Dreaming", "Sketching", "Painting", "Drawing",
+  "Composing", "Crafting", "Designing", "Rendering", "Sculpting",
+  "Weaving", "Brewing", "Conjuring", "Assembling", "Shaping",
+  "Molding", "Forging", "Blending", "Stitching", "Knitting",
+  "Layering", "Coloring", "Shading", "Illustrating", "Doodling",
+  "Drafting", "Developing", "Retouching", "Polishing", "Refining",
+  "Glazing", "Etching", "Engraving", "Carving", "Casting",
+  "Spinning", "Threading", "Braiding", "Collaging", "Cropping",
+  "Focusing", "Lighting", "Staging", "Posing", "Styling",
+  "Curating", "Arranging", "Balancing", "Harmonizing", "Orchestrating",
+  "Choreographing", "Animating", "Visualizing", "Envisioning", "Inventing",
+  "Concocting", "Cooking", "Baking", "Simmering", "Whisking",
+  "Kneading", "Sprinkling", "Dusting", "Buffing", "Burnishing",
+  "Gilding", "Embellishing", "Decorating", "Tinting", "Toning",
+  "Saturating", "Brightening", "Sharpening", "Smoothing", "Softening",
+  "Enhancing", "Perfecting", "Finessing", "Tweaking", "Tuning",
+  "Calibrating", "Synthesizing", "Generating", "Materializing", "Manifesting",
+  "Summoning", "Enchanting", "Beautifying", "Reimagining", "Remixing",
+  "Airbrushing", "Stenciling", "Silkscreening", "Marbling", "Splattering",
+  "Daubing", "Inking", "Pixelating", "Dithering", "Alchemizing",
+];
+
+function randomVerb(prev) {
+  while (true) {
+    const word = CREATING_VERBS[(Math.random() * CREATING_VERBS.length) | 0];
+    if (word !== prev) return word;
+  }
+}
+
+function CreatingWord() {
+  const [word, setWord] = useState(() => randomVerb(null));
+  useEffect(() => {
+    const id = setInterval(() => setWord((prev) => randomVerb(prev)), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return word;
+}
+
 const FullImage = styled.img`
   background: #000;
   ${(p) =>
@@ -308,7 +349,7 @@ function BoothPage() {
       {printPhase === "printing" ? (
         <WaitingWrap>
           <Spinner />
-          Printing…
+          Don&rsquo;t touch paper!
         </WaitingWrap>
       ) : printPhase === "ready" ? (
         <WaitingWrap>Take your photo</WaitingWrap>
@@ -320,7 +361,7 @@ function BoothPage() {
       ) : scanned ? (
         <WaitingWrap>
           <Spinner />
-          Waiting for photos…
+          Waiting for photos
         </WaitingWrap>
       ) : !showViewer ? (
         <QRWrap>
@@ -335,7 +376,7 @@ function BoothPage() {
       ) : (
         <WaitingWrap>
           <Spinner />
-          Creating…
+          <CreatingWord />
         </WaitingWrap>
       )}
     </Page>

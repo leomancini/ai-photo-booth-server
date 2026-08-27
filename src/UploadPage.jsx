@@ -108,9 +108,9 @@ const MAX_PHOTOS = 3;
 
 // What the print job status should say on the button.
 const PRINT_LABELS = {
-  queued: "Sending to printer…",
-  claimed: "Sending to printer…",
-  printing: "Printing…",
+  queued: "Sending to printer",
+  claimed: "Sending to printer",
+  printing: "Don’t touch paper!",
   done: "Printed ✓",
   failed: "Print failed — tap to retry",
 };
@@ -219,7 +219,7 @@ function UploadPage({ sessionId }) {
           {!ready.length ? (
             <>
               <Done>✅</Done>
-              <Waiting>Creating your photos…</Waiting>
+              <Waiting>Creating your photos</Waiting>
             </>
           ) : (
             <ResultsWrap>
@@ -287,7 +287,7 @@ function UploadPage({ sessionId }) {
 
         {photos.length >= 1 && (
           <Button disabled={sending} onClick={submit}>
-            {sending ? "Sending…" : "Create My Photos"}
+            {sending ? "Sending" : "Create My Photos"}
           </Button>
         )}
 
