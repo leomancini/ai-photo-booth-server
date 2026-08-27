@@ -50,12 +50,19 @@ const Remove = styled.button`
 `;
 
 const AddButton = styled(Button)`
+  width: 100%;
+  max-width: 480px;
   background: ${(p) => (p.disabled ? "#1a1a1f" : "#27272a")};
   color: ${(p) => (p.disabled ? "#3f3f46" : "#f4f4f5")};
 
   &:hover:enabled {
     background: #3f3f46;
   }
+`;
+
+const SubmitButton = styled(Button)`
+  width: 100%;
+  max-width: 480px;
 `;
 
 const Done = styled.div`
@@ -280,15 +287,13 @@ function UploadPage({ sessionId }) {
           disabled={photos.length >= MAX_PHOTOS}
           onClick={() => input.current?.click()}
         >
-          {photos.length
-            ? `Add More (${photos.length}/${MAX_PHOTOS})`
-            : "Add Photos"}
+          {photos.length ? "Add more photos" : "Choose photos"}
         </AddButton>
 
         {photos.length >= 1 && (
-          <Button disabled={sending} onClick={submit}>
-            {sending ? "Sending" : "Create My Photos"}
-          </Button>
+          <SubmitButton disabled={sending} onClick={submit}>
+            {sending ? "Sending" : "Done"}
+          </SubmitButton>
         )}
 
         {error && <ErrorMsg>{error}</ErrorMsg>}
