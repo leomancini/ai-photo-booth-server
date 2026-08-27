@@ -64,6 +64,7 @@ const AddButton = styled(Button)`
 const SubmitButton = styled(Button)`
   width: 100%;
   max-width: 480px;
+  margin-top: 12px;
 `;
 
 const Done = styled.div`
