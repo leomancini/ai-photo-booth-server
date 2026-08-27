@@ -39,8 +39,8 @@ const Preview = styled.div`
 
 const Remove = styled.button`
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 2px;
+  right: 2px;
   width: 32px;
   height: 32px;
   border: none;
