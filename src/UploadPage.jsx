@@ -9,6 +9,8 @@ const Centered = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  -webkit-user-select: none;
+  user-select: none;
 `;
 
 const Previews = styled.div`
@@ -18,6 +20,7 @@ const Previews = styled.div`
   width: 100%;
   max-width: 480px;
   margin-top: 8px;
+  margin-bottom: 28px;
 `;
 
 const Preview = styled.div`
@@ -38,19 +41,20 @@ const Remove = styled.button`
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border: none;
   background: none;
   padding: 0;
   color: #fff;
-  font-size: 20px;
+  font-size: 26px;
   line-height: 1;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
   cursor: pointer;
 `;
 
 const AddButton = styled(Button)`
+  margin-top: 0;
   width: 100%;
   max-width: 480px;
   background: ${(p) => (p.disabled ? "#1a1a1f" : "#27272a")};
@@ -288,7 +292,7 @@ function UploadPage({ sessionId }) {
 
         {photos.length < MAX_PHOTOS && (
           <AddButton onClick={() => input.current?.click()}>
-            {photos.length ? "Add more photos" : "Choose photos"}
+            {photos.length ? "Add more photos" : "Choose up to 3 photos"}
           </AddButton>
         )}
 
