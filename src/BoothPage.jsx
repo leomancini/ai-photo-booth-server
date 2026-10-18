@@ -20,6 +20,10 @@ const QRImage = styled.img`
 
 // While photos generate, show a new creating-verb every second, picked at
 // random but never the same one twice in a row.
+// How long the booth tolerates hearing nothing from the server before it
+// assumes the WebSocket is dead. The server pings every 25s.
+const WS_SILENCE_MS = 60 * 1000;
+
 const CREATING_VERBS = [
   "Imagining", "Dreaming", "Sketching", "Painting", "Drawing",
   "Composing", "Crafting", "Designing", "Rendering", "Sculpting",
@@ -208,27 +212,46 @@ function BoothPage() {
   }, []);
 
   // Live session updates over WebSocket, with auto-reconnect.
+  //
+  // onclose alone is not enough. The booth sits idle on a QR code for long
+  // stretches, and an idle connection can be dropped by a proxy or NAT
+  // without either end hearing about it: the socket here stays "open", no
+  // close event ever fires, and the kiosk never learns the code was scanned.
+  // The server sends a ping message every 25s, so treat silence longer than
+  // that as a dead link and reconnect; the server replays the current
+  // snapshot on every connect, so nothing is missed.
   useEffect(() => {
     if (!sessionId) return;
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     let socket;
     let closed = false;
+    let silence;
+    const expectTraffic = () => {
+      clearTimeout(silence);
+      silence = setTimeout(() => socket?.close(), WS_SILENCE_MS);
+    };
     const connect = () => {
       socket = new WebSocket(
         `${proto}://${window.location.host}/ws?session=${sessionId}&key=${encodeURIComponent(KEY)}`
       );
+      expectTraffic();
       socket.onmessage = (e) => {
+        expectTraffic();
         try {
-          setSession(JSON.parse(e.data));
+          const data = JSON.parse(e.data);
+          if (data?.type === "ping") return;
+          setSession(data);
         } catch {}
       };
       socket.onclose = () => {
+        clearTimeout(silence);
         if (!closed) setTimeout(connect, 1500);
       };
     };
     connect();
     return () => {
       closed = true;
+      clearTimeout(silence);
       socket?.close();
     };
   }, [sessionId]);

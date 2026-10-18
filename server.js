@@ -857,6 +857,35 @@ wss.on("connection", (socket, req) => {
     if (!sockets.size) sessionSockets.delete(sessionId);
   });
 
+  socket.isAlive = true;
+  socket.on("pong", () => {
+    socket.isAlive = true;
+  });
+
   const s = sessions.get(sessionId);
   if (s) socket.send(JSON.stringify(sessionSnapshot(s)));
 });
+
+// A kiosk sitting on a QR code for an hour sends nothing, and an idle tunnel
+// is exactly what a proxy or NAT quietly drops. When that happens neither end
+// is told: the kiosk keeps an open-looking socket forever and never sees the
+// phone's scan. So keep traffic flowing both ways. The protocol-level ping
+// detects dead clients here (and keeps Apache's idle timer from expiring the
+// tunnel); the "ping" message gives the kiosk something it can observe, since
+// browsers answer protocol pings invisibly. Both arrive together.
+const WS_HEARTBEAT_MS = 25 * 1000;
+const heartbeat = setInterval(() => {
+  for (const socket of wss.clients) {
+    if (socket.isAlive === false) {
+      socket.terminate();
+      continue;
+    }
+    socket.isAlive = false;
+    try {
+      socket.ping();
+      socket.send(JSON.stringify({ type: "ping" }));
+    } catch {}
+  }
+}, WS_HEARTBEAT_MS);
+heartbeat.unref();
+wss.on("close", () => clearInterval(heartbeat));
