@@ -102,6 +102,12 @@ const FailureDetail = styled.div`
   color: #71717a;
 `;
 
+const Progress = styled.div`
+  font-size: 22px;
+  color: #71717a;
+  font-variant-numeric: tabular-nums;
+`;
+
 const Spinner = styled.div`
   width: 96px;
   height: 96px;
@@ -302,19 +308,60 @@ function BoothPage() {
     return () => clearTimeout(timer);
   }, [failedJob]);
 
-  // Only start the slideshow once the *first* style exists, so the sequence
-  // always opens on the same photo. Styles can finish in any order, but
-  // `results` keeps the order they were defined in, so filtering preserves it.
-  const firstReady = session?.results?.[0]?.status === "done";
+  // Fetch every finished image the moment the server reports it, and remember
+  // which have actually arrived, so the slideshow can wait for all of them and
+  // the first lap renders as instantly as every later one.
+  const photoIds = ready.map((r) => r.id).join(",");
+  const preloaded = useRef({ sessionId: null, images: new Map() });
+  const [loadedIds, setLoadedIds] = useState(() => new Set());
+  useEffect(() => {
+    if (!sessionId) return;
+    const cache = preloaded.current;
+    if (cache.sessionId !== sessionId) {
+      cache.sessionId = sessionId;
+      cache.images = new Map();
+      setLoadedIds(new Set());
+    }
+    for (const r of ready) {
+      if (cache.images.has(r.id)) continue;
+      const img = new Image();
+      const settle = () =>
+        setLoadedIds((prev) => (prev.has(r.id) ? prev : new Set(prev).add(r.id)));
+      img.onload = settle;
+      img.onerror = settle; // a broken image must not hold the show forever
+      img.src = `/api/session/${sessionId}/image/${r.id}?key=${encodeURIComponent(KEY)}`;
+      cache.images.set(r.id, img);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- photoIds stands in for ready
+  }, [sessionId, photoIds]);
+
+  // Only start the slideshow once *every* style has finished and every finished
+  // image is in the browser, so the sequence opens complete and in order rather
+  // than growing as styles trickle in. The server flips the session to "done"
+  // when the last style settles, success or failure.
+  const total = session?.results?.length || 0;
+  const allReady =
+    session?.status === "done" &&
+    ready.length > 0 &&
+    ready.every((r) => loadedIds.has(r.id));
+
+  // Nothing usable came back: show why briefly, then offer the next person a
+  // fresh QR rather than leaving the booth stuck on an apology.
+  const nothingCameBack = session?.status === "done" && !ready.length;
+  useEffect(() => {
+    if (!nothingCameBack) return;
+    const timer = setTimeout(startSession, PRINT_FAILED_MS);
+    return () => clearTimeout(timer);
+  }, [nothingCameBack, startSession]);
 
   useEffect(() => {
-    if (!firstReady || ready.length < 2 || printPhase) return;
+    if (!allReady || ready.length < 2 || printPhase) return;
     const timer = setInterval(
       () => setIndex((i) => (i + 1) % ready.length),
       SLIDE_MS
     );
     return () => clearInterval(timer);
-  }, [firstReady, ready.length, printPhase]);
+  }, [allReady, ready.length, printPhase]);
 
   // Keep the index valid as results stream in.
   useEffect(() => {
@@ -344,28 +391,6 @@ function BoothPage() {
   }, [ready.length, startSession]);
 
   const current = ready[index];
-  const photoIds = ready.map((r) => r.id).join(",");
-
-  // Fetch every finished image the moment the server reports it, not when the
-  // slideshow first reaches it. Otherwise the first lap shows each photo only
-  // after a network round trip, while the Pi lights its button on the index
-  // change, so the buttons run ahead of the screen until the cache is warm.
-  const preloaded = useRef({ sessionId: null, images: new Map() });
-  useEffect(() => {
-    if (!sessionId) return;
-    const cache = preloaded.current;
-    if (cache.sessionId !== sessionId) {
-      cache.sessionId = sessionId;
-      cache.images = new Map();
-    }
-    for (const r of ready) {
-      if (cache.images.has(r.id)) continue;
-      const img = new Image();
-      img.src = `/api/session/${sessionId}/image/${r.id}?key=${encodeURIComponent(KEY)}`;
-      cache.images.set(r.id, img);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- photoIds stands in for ready
-  }, [sessionId, photoIds]);
 
   // The booth's physical buttons are wired to the Pi, not to this browser, so
   // publish what is on screen for the Pi's button daemon to read over the
@@ -377,9 +402,9 @@ function BoothPage() {
       photos: ready.map((r) => ({ id: r.id, label: r.label })),
       index,
       phase: printPhase,
-      selectable: Boolean(firstReady && current && !printPhase),
+      selectable: Boolean(allReady && current && !printPhase),
     };
-  }, [sessionId, photoIds, index, printPhase, firstReady, current]);
+  }, [sessionId, photoIds, index, printPhase, allReady, current]);
 
   if (authError) {
     return (
@@ -412,16 +437,26 @@ function BoothPage() {
         <QRWrap>
           {qr && <QRImage src={qr.dataUrl} alt="Scan to upload photos" />}
         </QRWrap>
-      ) : firstReady && current ? (
+      ) : allReady && current ? (
         <FullImage
           $onDevice={ON_DEVICE}
           src={`/api/session/${sessionId}/image/${current.id}?key=${encodeURIComponent(KEY)}`}
           alt={current.label}
         />
+      ) : nothingCameBack ? (
+        <WaitingWrap>
+          No photos came back
+          <FailureDetail>Scan again to try another shot</FailureDetail>
+        </WaitingWrap>
       ) : (
         <WaitingWrap>
           <Spinner />
           <CreatingWord />
+          {total > 0 && (
+            <Progress>
+              {loadedIds.size} of {total} ready
+            </Progress>
+          )}
         </WaitingWrap>
       )}
     </Page>
