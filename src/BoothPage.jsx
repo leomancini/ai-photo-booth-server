@@ -258,6 +258,11 @@ function BoothPage() {
 
   const ready = session?.results?.filter((r) => r.status === "done") || [];
   const scanned = session?.status === "scanned";
+  // The Pi reports whether it can reach the printer; a scan is pointless
+  // while it cannot, so the QR code gives way to the fix. Only a definite
+  // "no" counts: null means nobody has reported, which is also what a dev
+  // server with no Pi looks like, and the booth carries on as before.
+  const printerOff = session?.printer?.connected === false;
   const showViewer =
     session && session.status !== "waiting" && session.status !== "scanned";
 
@@ -425,6 +430,11 @@ function BoothPage() {
         <WaitingWrap>
           <Spinner />
           Waiting for photos
+        </WaitingWrap>
+      ) : !showViewer && printerOff ? (
+        <WaitingWrap>
+          Printer is off
+          <FailureDetail>Press the power button on the printer</FailureDetail>
         </WaitingWrap>
       ) : !showViewer ? (
         <QRWrap>
