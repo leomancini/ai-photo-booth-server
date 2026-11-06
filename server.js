@@ -551,6 +551,7 @@ const sessionSockets = new Map();
 function sessionSnapshot(s) {
   return {
     status: s.status,
+    printer: printerSnapshot(),
     results: s.results.map(({ id, label, status, error }) => ({
       id,
       label,
@@ -572,6 +573,56 @@ function broadcastSession(sessionId) {
     } catch {}
   }
 }
+
+// ---------------------------------------------------------------------------
+// Printer presence
+// ---------------------------------------------------------------------------
+// The Pi's keepalive daemon holds a BLE connection to the printer and reports
+// here whenever that connection comes or goes, plus a heartbeat while it is
+// steady. The booth uses it to swap the QR code for "turn the printer on"
+// before anyone spends a scan on a printer that is asleep.
+//
+// There is one printer, so this is global rather than per session. A report
+// that has gone quiet for longer than the heartbeat interval allows is
+// treated as unknown, not as its last value: a Pi that lost wifi looks
+// exactly like one whose printer is fine.
+const PRINTER_STALE_MS = 90 * 1000;
+let printerReport = null; // { connected, updatedAt }
+
+function printerSnapshot() {
+  if (!printerReport || Date.now() - printerReport.updatedAt > PRINTER_STALE_MS) {
+    return { connected: null };
+  }
+  return { connected: printerReport.connected };
+}
+
+function broadcastAllSessions() {
+  for (const sessionId of sessionSockets.keys()) broadcastSession(sessionId);
+}
+
+// Push a fresh snapshot when the report goes stale (or comes back) without
+// any other session activity to carry it.
+let lastPrinterSnapshot = JSON.stringify(printerSnapshot());
+setInterval(() => {
+  const now = JSON.stringify(printerSnapshot());
+  if (now === lastPrinterSnapshot) return;
+  lastPrinterSnapshot = now;
+  broadcastAllSessions();
+}, 15 * 1000).unref();
+
+app.post("/api/printer/status", requireKey, (req, res) => {
+  const connected = req.body?.connected;
+  if (typeof connected !== "boolean") {
+    return res.status(400).json({ error: "connected must be a boolean" });
+  }
+  printerReport = { connected, updatedAt: Date.now() };
+  const now = JSON.stringify(printerSnapshot());
+  if (now !== lastPrinterSnapshot) {
+    lastPrinterSnapshot = now;
+    broadcastAllSessions();
+  }
+  res.json({ ok: true });
+});
 
 // ---------------------------------------------------------------------------
 // Print queue
