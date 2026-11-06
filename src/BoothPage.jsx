@@ -102,12 +102,6 @@ const FailureDetail = styled.div`
   color: #71717a;
 `;
 
-const Progress = styled.div`
-  font-size: 22px;
-  color: #71717a;
-  font-variant-numeric: tabular-nums;
-`;
-
 const Spinner = styled.div`
   width: 96px;
   height: 96px;
@@ -339,7 +333,6 @@ function BoothPage() {
   // image is in the browser, so the sequence opens complete and in order rather
   // than growing as styles trickle in. The server flips the session to "done"
   // when the last style settles, success or failure.
-  const total = session?.results?.length || 0;
   const allReady =
     session?.status === "done" &&
     ready.length > 0 &&
@@ -452,11 +445,6 @@ function BoothPage() {
         <WaitingWrap>
           <Spinner />
           <CreatingWord />
-          {total > 0 && (
-            <Progress>
-              {loadedIds.size} of {total} ready
-            </Progress>
-          )}
         </WaitingWrap>
       )}
     </Page>
