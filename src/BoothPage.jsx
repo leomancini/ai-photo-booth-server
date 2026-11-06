@@ -344,12 +344,33 @@ function BoothPage() {
   }, [ready.length, startSession]);
 
   const current = ready[index];
+  const photoIds = ready.map((r) => r.id).join(",");
+
+  // Fetch every finished image the moment the server reports it, not when the
+  // slideshow first reaches it. Otherwise the first lap shows each photo only
+  // after a network round trip, while the Pi lights its button on the index
+  // change, so the buttons run ahead of the screen until the cache is warm.
+  const preloaded = useRef({ sessionId: null, images: new Map() });
+  useEffect(() => {
+    if (!sessionId) return;
+    const cache = preloaded.current;
+    if (cache.sessionId !== sessionId) {
+      cache.sessionId = sessionId;
+      cache.images = new Map();
+    }
+    for (const r of ready) {
+      if (cache.images.has(r.id)) continue;
+      const img = new Image();
+      img.src = `/api/session/${sessionId}/image/${r.id}?key=${encodeURIComponent(KEY)}`;
+      cache.images.set(r.id, img);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- photoIds stands in for ready
+  }, [sessionId, photoIds]);
 
   // The booth's physical buttons are wired to the Pi, not to this browser, so
   // publish what is on screen for the Pi's button daemon to read over the
   // DevTools port: which photo is showing (so it can light that button), and
   // whether a press should be accepted at all.
-  const photoIds = ready.map((r) => r.id).join(",");
   useEffect(() => {
     window.__boothState = {
       sessionId,
