@@ -434,7 +434,7 @@ function BoothPage() {
       ) : !showViewer && printerOff ? (
         <WaitingWrap>
           Printer is off
-          <FailureDetail>Press the power button on the printer</FailureDetail>
+          <FailureDetail>Press the power button</FailureDetail>
         </WaitingWrap>
       ) : !showViewer ? (
         <QRWrap>
