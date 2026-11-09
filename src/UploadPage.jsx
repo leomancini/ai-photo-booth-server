@@ -175,7 +175,7 @@ function UploadPage({ sessionId }) {
 
         {photos.length >= 1 && (
           <SubmitButton disabled={sending} onClick={submit}>
-            {sending ? "Sending" : "Done"}
+            {sending ? "Sending…" : "Done"}
           </SubmitButton>
         )}
 

@@ -60,7 +60,7 @@ function CreatingWord() {
     const id = setInterval(() => setWord((prev) => randomVerb(prev)), 1000);
     return () => clearInterval(id);
   }, []);
-  return word;
+  return `${word}…`;
 }
 
 const FullImage = styled.img`
