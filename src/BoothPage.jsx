@@ -139,6 +139,13 @@ const PRINTING_MS = 80000;
 // a QR code for the next person.
 const RESET_AFTER_PRINT_MS = 8000;
 
+// Every screen that is not the QR code needs its own way back to it: someone
+// scans and walks off, generation never reports back, or the photos are left
+// on screen with nobody printing one. After this long without moving on, the
+// booth starts over. Longer than the server's worst case for one generation
+// (three 90s attempts plus the download), so it never cuts a live one short.
+const BOOTH_IDLE_MS = 6 * 60 * 1000;
+
 // Each finished photo gets this long on screen before the next one.
 const SLIDE_MS = 5000;
 
@@ -170,34 +177,54 @@ function BoothPage() {
   const [index, setIndex] = useState(0);
   const [authError, setAuthError] = useState(false);
 
+  // A failed request must not leave the booth on a black screen, so keep
+  // trying (2s, 4s, 8s, then every 15s) until a session exists. Each call
+  // supersedes any earlier one still in flight or still retrying.
+  const startAttempt = useRef(0);
   const startSession = useCallback(async () => {
+    const attempt = ++startAttempt.current;
     setSession(null);
     setIndex(0);
     setQr(null);
-    try {
-      const res = await fetch(`/api/session?key=${encodeURIComponent(KEY)}`, {
-        method: "POST",
-      });
-      if (res.status === 401 || res.status === 500) {
-        setAuthError(true);
-        return;
-      }
-      const data = await res.json();
-      setSessionId(data.sessionId);
-      const url = `${window.location.origin}/u/${data.sessionId}`;
-      setQr({
-        dataUrl: await QRCode.toDataURL(url, {
+    for (let delay = 2000; ; delay = Math.min(delay * 2, 15000)) {
+      const abort = new AbortController();
+      const hung = setTimeout(() => abort.abort(), 15000);
+      try {
+        const res = await fetch(`/api/session?key=${encodeURIComponent(KEY)}`, {
+          method: "POST",
+          signal: abort.signal,
+        });
+        if (attempt !== startAttempt.current) return;
+        if (res.status === 401 || res.status === 500) {
+          setAuthError(true);
+          return;
+        }
+        const data = await res.json();
+        if (!data.sessionId) throw new Error("No session in response");
+        const url = `${window.location.origin}/u/${data.sessionId}`;
+        const dataUrl = await QRCode.toDataURL(url, {
           width: 640,
           margin: 1,
           color: { dark: "#ffffff", light: "#000000" },
-        }),
-        url,
-      });
-    } catch {}
+        });
+        if (attempt !== startAttempt.current) return;
+        setSessionId(data.sessionId);
+        setQr({ dataUrl, url });
+        return;
+      } catch {
+      } finally {
+        clearTimeout(hung);
+      }
+      await new Promise((r) => setTimeout(r, delay));
+      if (attempt !== startAttempt.current) return;
+    }
   }, []);
 
   useEffect(() => {
     startSession();
+    return () => {
+      startAttempt.current++; // stop retrying once the page is gone
+    };
   }, [startSession]);
 
   // The booth screen is a display: nobody points at it and nobody scrolls it.
@@ -240,6 +267,15 @@ function BoothPage() {
         try {
           const data = JSON.parse(e.data);
           if (data?.type === "ping") return;
+          // The server no longer has this session (it expired, or the server
+          // restarted), so the QR code on screen leads nowhere. Stop
+          // reconnecting to it and get a fresh one; startSession retries on
+          // its own backoff, and the new session id reopens the socket.
+          if (data?.type === "gone") {
+            closed = true;
+            startSession();
+            return;
+          }
           setSession(data);
         } catch {}
       };
@@ -254,7 +290,7 @@ function BoothPage() {
       clearTimeout(silence);
       socket?.close();
     };
-  }, [sessionId]);
+  }, [sessionId, startSession]);
 
   const ready = session?.results?.filter((r) => r.status === "done") || [];
   const scanned = session?.status === "scanned";
@@ -351,6 +387,22 @@ function BoothPage() {
     const timer = setTimeout(startSession, PRINT_FAILED_MS);
     return () => clearTimeout(timer);
   }, [nothingCameBack, startSession]);
+
+  const idlePhase =
+    printPhase || nothingCameBack
+      ? null // these run their own timers
+      : scanned
+        ? "scanned"
+        : !showViewer
+          ? null
+          : allReady
+            ? "photos"
+            : `creating:${ready.length}`;
+  useEffect(() => {
+    if (!idlePhase) return;
+    const timer = setTimeout(startSession, BOOTH_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [idlePhase, sessionId, startSession]);
 
   useEffect(() => {
     if (!allReady || ready.length < 2 || printPhase) return;

@@ -403,6 +403,9 @@ async function generateStyledImage(style, imageContent) {
           messages: [{ role: "user", content }],
           stream: false,
         }),
+        // A hung upstream must fail (and be retried) rather than leave the
+        // booth on "Creating…" indefinitely.
+        signal: AbortSignal.timeout(90_000),
       });
       response = await poeRes.json();
       break;
@@ -419,7 +422,7 @@ async function generateStyledImage(style, imageContent) {
     throw new Error("No image returned by the model");
   }
 
-  const imgRes = await fetch(urlMatch[0]);
+  const imgRes = await fetch(urlMatch[0], { signal: AbortSignal.timeout(30_000) });
   if (!imgRes.ok) throw new Error("Failed to download the combined image");
   return toSquare(Buffer.from(await imgRes.arrayBuffer()));
 }
@@ -540,7 +543,11 @@ const SESSION_TTL_MS = 60 * 60 * 1000;
 setInterval(() => {
   const now = Date.now();
   for (const [id, s] of sessions) {
-    if (now - s.createdAt > SESSION_TTL_MS) sessions.delete(id);
+    // A session a kiosk is still connected to is the one on its screen (the
+    // QR code may sit there for hours), so it only ages once nobody is
+    // listening.
+    if (sessionSockets.get(id)?.size) s.lastActive = now;
+    else if (now - (s.lastActive || s.createdAt) > SESSION_TTL_MS) sessions.delete(id);
   }
 }, 5 * 60 * 1000).unref();
 
@@ -813,9 +820,17 @@ app.post("/api/print/:jobId/status", requireKey, (req, res) => {
   res.json({ ok: true });
 });
 
+// Turn away an unknown session before multer buffers its photos into memory.
+function requireSession(req, res, next) {
+  if (!sessions.has(req.params.id)) {
+    return res.status(404).json({ error: "Session not found — rescan the QR code" });
+  }
+  next();
+}
+
 // The phone posts its photos here; generation runs in the background and the
 // kiosk sees each style appear in the session as it finishes.
-app.post("/api/session/:id/photos", upload.array("images", 3), async (req, res) => {
+app.post("/api/session/:id/photos", requireSession, upload.array("images", 3), async (req, res) => {
   if (!process.env.POE_API_KEY) {
     return res.status(500).json({ error: "POE_API_KEY is not configured" });
   }
@@ -892,6 +907,9 @@ const server = app.listen(port, () => {
 // Kiosk clients connect to /ws?session=<id> for live session updates.
 const wss = new WebSocketServer({ server, path: "/ws" });
 wss.on("connection", (socket, req) => {
+  // An "error" event with no listener would take the whole process down.
+  socket.on("error", (e) => console.warn("[ws] socket error:", e.message));
+
   const url = new URL(req.url, "http://localhost");
   const sessionId = url.searchParams.get("session");
   if (!sessionId) return socket.close();
@@ -914,7 +932,12 @@ wss.on("connection", (socket, req) => {
   });
 
   const s = sessions.get(sessionId);
-  if (s) socket.send(JSON.stringify(sessionSnapshot(s)));
+  if (s) return socket.send(JSON.stringify(sessionSnapshot(s)));
+
+  // The session expired or was lost in a restart. Tell the kiosk, so it can
+  // start a fresh one instead of showing a QR code that leads nowhere.
+  socket.send(JSON.stringify({ type: "gone" }));
+  socket.close();
 });
 
 // A kiosk sitting on a QR code for an hour sends nothing, and an idle tunnel
