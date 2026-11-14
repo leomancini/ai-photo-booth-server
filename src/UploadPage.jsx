@@ -78,6 +78,10 @@ const Done = styled.div`
 
 const MAX_PHOTOS = 3;
 
+// The kiosk gives up on an upload after a minute and shows a new QR code, so
+// stop sending at the same point instead of spinning at a session that is gone.
+const UPLOAD_TIMEOUT_MS = 60 * 1000;
+
 function UploadPage({ sessionId }) {
   const [photos, setPhotos] = useState([]);
   const [sending, setSending] = useState(false);
@@ -112,19 +116,29 @@ function UploadPage({ sessionId }) {
     if (photos.length < 1 || sending) return;
     setSending(true);
     setError(null);
+    // Starts the kiosk's clock on this upload.
+    fetch(`/api/session/${sessionId}/uploading`, { method: "POST" }).catch(() => {});
+    const abort = new AbortController();
+    const timeout = setTimeout(() => abort.abort(), UPLOAD_TIMEOUT_MS);
     try {
       const form = new FormData();
       photos.forEach((img, i) => form.append("images", img.file, `photo-${i}.jpg`));
       const res = await fetch(`/api/session/${sessionId}/photos`, {
         method: "POST",
         body: form,
+        signal: abort.signal,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
       setSent(true);
     } catch (e) {
-      setError(e.message);
+      setError(
+        abort.signal.aborted
+          ? "Upload timed out — scan the QR code again"
+          : e.message
+      );
     } finally {
+      clearTimeout(timeout);
       setSending(false);
     }
   };

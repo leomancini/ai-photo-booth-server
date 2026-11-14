@@ -146,6 +146,12 @@ const RESET_AFTER_PRINT_MS = 8000;
 // (three 90s attempts plus the download), so it never cuts a live one short.
 const BOOTH_IDLE_MS = 6 * 60 * 1000;
 
+// Once someone presses Done on their phone, the photos get this long to reach
+// the server. Past it the upload is not coming (the phone lost signal, or was
+// pocketed mid-send), so the booth goes back to a QR code rather than sitting
+// on "Waiting for photos" for the full idle timeout.
+const UPLOAD_TIMEOUT_MS = 60 * 1000;
+
 // Each finished photo gets this long on screen before the next one.
 const SLIDE_MS = 5000;
 
@@ -293,14 +299,15 @@ function BoothPage() {
   }, [sessionId, startSession]);
 
   const ready = session?.results?.filter((r) => r.status === "done") || [];
-  const scanned = session?.status === "scanned";
+  const uploading = session?.status === "uploading";
+  const scanned = session?.status === "scanned" || uploading;
   // The Pi reports whether it can reach the printer; a scan is pointless
   // while it cannot, so the QR code gives way to the fix. Only a definite
   // "no" counts: null means nobody has reported, which is also what a dev
   // server with no Pi looks like, and the booth carries on as before.
   const printerOff = session?.printer?.connected === false;
   const showViewer =
-    session && session.status !== "waiting" && session.status !== "scanned";
+    session && session.status !== "waiting" && !scanned;
 
   // Print state arrives on the same WebSocket as everything else, so the booth
   // can follow a print someone started from their phone.
@@ -388,8 +395,16 @@ function BoothPage() {
     return () => clearTimeout(timer);
   }, [nothingCameBack, startSession]);
 
+  // The server moves the session on to "generating" as soon as the photos
+  // land, which cancels this; a rejected upload drops it back to "scanned".
+  useEffect(() => {
+    if (!uploading) return;
+    const timer = setTimeout(startSession, UPLOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [uploading, sessionId, startSession]);
+
   const idlePhase =
-    printPhase || nothingCameBack
+    printPhase || nothingCameBack || uploading
       ? null // these run their own timers
       : scanned
         ? "scanned"
