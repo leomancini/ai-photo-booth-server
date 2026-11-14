@@ -812,9 +812,11 @@ function noteAgentPoll() {
     agentBusy = false;
     return;
   }
-  if (bootPrint.pending && !bootPrint.triggeredAt && gap !== null && gap > BOOT_GAP_MS) {
+  // The reboot-gap detection missed the actual reboot (2026-11-14), so print
+  // on the agent's next poll instead. The gap is only logged now.
+  if (bootPrint.pending && !bootPrint.triggeredAt) {
     bootPrint.triggeredAt = now;
-    console.log(`[boot-print] agent back after ${Math.round(gap / 1000)}s of silence, treating it as a reboot`);
+    console.log(`[boot-print] agent polled (gap ${gap === null ? "unknown" : Math.round(gap / 1000) + "s"}), printing`);
   }
 }
 
