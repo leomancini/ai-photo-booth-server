@@ -717,6 +717,20 @@ app.post("/api/session/:id/scanned", (req, res) => {
   res.json({ ok: true });
 });
 
+// The phone pings this the moment someone presses Done, just ahead of the
+// photos themselves. The ping is tiny and the photos are not, so on a bad
+// connection it gets through while the upload stalls -- which is what lets
+// the kiosk put a deadline on the upload instead of waiting on it forever.
+app.post("/api/session/:id/uploading", (req, res) => {
+  const s = sessions.get(req.params.id);
+  if (!s) return res.status(404).json({ error: "Session not found" });
+  if (s.status === "waiting" || s.status === "scanned") {
+    s.status = "uploading";
+    broadcastSession(req.params.id);
+  }
+  res.json({ ok: true });
+});
+
 app.get("/api/session/:id/image/:styleId", requireKey, (req, res) => {
   const s = sessions.get(req.params.id);
   const buf = s?.images.get(req.params.styleId);
@@ -843,8 +857,17 @@ app.post("/api/session/:id/photos", requireSession, upload.array("images", 3), a
     return res.status(409).json({ error: "Already creating photos for this session" });
   }
 
+  // An upload that arrived but could not be used hands the phone an error it
+  // can retry from, so take the kiosk off its upload deadline until it does.
+  const uploadRejected = () => {
+    if (s.status !== "uploading") return;
+    s.status = "scanned";
+    broadcastSession(s.id);
+  };
+
   const files = req.files || [];
   if (files.length < 1 || files.length > 3) {
+    uploadRejected();
     return res.status(400).json({ error: "Please upload 1 to 3 images" });
   }
 
@@ -891,6 +914,7 @@ app.post("/api/session/:id/photos", requireSession, upload.array("images", 3), a
     });
   } catch (e) {
     console.error("[session photos] error:", e);
+    uploadRejected();
     res.status(500).json({ error: e.message || "Failed to process images" });
   }
 });
