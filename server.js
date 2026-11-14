@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { WebSocketServer } from "ws";
 import "dotenv/config";
 import { randomUUID } from "crypto";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -775,120 +775,9 @@ app.post("/api/session/:id/print", (req, res) => {
   res.json({ jobId: job.id, status: job.status });
 });
 
-// ---------------------------------------------------------------------------
-// One-time boot print
-// ---------------------------------------------------------------------------
-// Prints boot-print/print.jpg once, the next time the Pi reboots. The Pi has
-// no "I just booted" signal, so infer one: the print agent polls every few
-// seconds, and a reboot leaves a gap far longer than its worst network
-// backoff (30s). An agent coming back after more than BOOT_GAP_MS of silence
-// is taken as a fresh boot. Time spent printing does not count as silence.
-//
-// Fires only after a fresh "printer connected" report, so a printer still
-// off after the reboot just waits. Once it prints, .boot-print-done is
-// written so a server restart cannot print it again. Delete boot-print/ to
-// retire the feature.
-const BOOT_PRINT_IMAGE = join(__dirname, "boot-print", "print.jpg");
-const BOOT_PRINT_DONE = join(__dirname, ".boot-print-done");
-const BOOT_GAP_MS = 45_000;
-const BOOT_PRINT_MAX_ATTEMPTS = 2;
-
-const bootPrint = {
-  pending: existsSync(BOOT_PRINT_IMAGE) && !existsSync(BOOT_PRINT_DONE),
-  triggeredAt: null,
-  attempts: 0,
-  jobId: null,
-  lastError: null,
-};
-let lastAgentPollAt = null;
-let agentBusy = false;
-
-function noteAgentPoll() {
-  const now = Date.now();
-  const gap = lastAgentPollAt === null ? null : now - lastAgentPollAt;
-  lastAgentPollAt = now;
-  if (agentBusy) {
-    // Still busy means a job never reported back, e.g. a reboot mid-print.
-    agentBusy = false;
-    return;
-  }
-  // The reboot-gap detection missed the actual reboot (2026-11-14), so print
-  // on the agent's next poll instead. The gap is only logged now.
-  if (bootPrint.pending && !bootPrint.triggeredAt) {
-    bootPrint.triggeredAt = now;
-    console.log(`[boot-print] agent polled (gap ${gap === null ? "unknown" : Math.round(gap / 1000) + "s"}), printing`);
-  }
-}
-
-function maybeQueueBootPrint() {
-  if (!bootPrint.pending || !bootPrint.triggeredAt || bootPrint.jobId) return;
-  const fresh = printerReport && printerReport.updatedAt > bootPrint.triggeredAt;
-  if (!fresh || !printerReport.connected) return;
-  let image;
-  try {
-    image = readFileSync(BOOT_PRINT_IMAGE);
-  } catch (e) {
-    console.warn("[boot-print] image missing, giving up:", e.message);
-    bootPrint.pending = false;
-    return;
-  }
-  bootPrint.attempts++;
-  const job = {
-    id: `p${++printJobCounter}boot`,
-    sessionId: "boot-print",
-    styleId: "boot-print",
-    label: "boot print",
-    image,
-    status: "queued",
-    error: null,
-    createdAt: Date.now(),
-    boot: true,
-  };
-  printJobs.set(job.id, job);
-  bootPrint.jobId = job.id;
-  console.log(`[boot-print] queued ${job.id} (attempt ${bootPrint.attempts})`);
-}
-
-function noteBootPrintResult(job) {
-  if (!job.boot || job.status === "printing") return;
-  bootPrint.jobId = null;
-  if (job.status === "done") {
-    bootPrint.pending = false;
-    try {
-      writeFileSync(BOOT_PRINT_DONE, new Date().toISOString() + "\n");
-    } catch (e) {
-      console.warn("[boot-print] could not write the done marker:", e.message);
-    }
-    console.log("[boot-print] printed, will not print again");
-    return;
-  }
-  bootPrint.lastError = job.error;
-  if (bootPrint.attempts >= BOOT_PRINT_MAX_ATTEMPTS) {
-    bootPrint.pending = false;
-    console.warn(`[boot-print] failed ${bootPrint.attempts} times, giving up: ${job.error}`);
-  } else {
-    // Wait for another fresh "connected" report before trying again.
-    bootPrint.triggeredAt = Date.now();
-    console.warn(`[boot-print] failed, will retry: ${job.error}`);
-  }
-}
-
-// Keyless and harmless, so a deploy can be checked from outside.
-app.get("/api/boot-print", (req, res) => {
-  res.json({
-    pending: bootPrint.pending,
-    triggered: Boolean(bootPrint.triggeredAt),
-    attempts: bootPrint.attempts,
-    jobStatus: bootPrint.jobId ? printJobs.get(bootPrint.jobId)?.status : null,
-    lastError: bootPrint.lastError,
-  });
-});
-
 // Device-side: the Pi claims the oldest queued job. 204 means nothing to do,
 // which is the common case, so keep it cheap.
 app.get("/api/print/next", requireKey, (req, res) => {
-  noteAgentPoll();
-  maybeQueueBootPrint();
   let next = null;
   for (const job of printJobs.values()) {
     if (job.status !== "queued") continue;
@@ -898,7 +787,6 @@ app.get("/api/print/next", requireKey, (req, res) => {
 
   next.status = "claimed";
   next.claimedAt = Date.now();
-  agentBusy = true;
   broadcastSession(next.sessionId);
   res.json({
     jobId: next.id,
@@ -928,12 +816,6 @@ app.post("/api/print/:jobId/status", requireKey, (req, res) => {
   }
   job.status = status;
   job.error = status === "failed" ? req.body?.error || "Print failed" : null;
-  if (status !== "printing") {
-    // The agent is free again; measure the next silence from here.
-    agentBusy = false;
-    lastAgentPollAt = Date.now();
-  }
-  noteBootPrintResult(job);
   broadcastSession(job.sessionId);
   res.json({ ok: true });
 });
